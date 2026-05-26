@@ -1,0 +1,174 @@
+name: gha-docker-service-ssh
+
+description: |-
+  GitHub Action to manage the deployment of a Docker service over SSH.
+
+  Steps performed by the action, depending on the execution mode, are:
+    - Build Image
+    - Save Image to tar file
+    - Transfer Image over SSH to the remote server
+    - Load the Image on the remote server
+    - Stop and remove the existing Container (if exists)
+    - Run the Container as a service on the remote server
+
+author: albr21
+branding:
+  icon: cpu
+  color: purple
+
+inputs:
+  mode:
+    description: Execution mode (full, preload, run-only)
+    required: false
+    default: full
+  image-name:
+    description: Image name
+    required: true
+  image-tag:
+    description: Image tag
+    required: false
+    default: latest
+  dockerfile:
+    description: Dockerfile path
+    required: false
+    default: Dockerfile
+  docker-context:
+    description: Path of the docker's context
+    required: false
+    default: "."
+  user:
+    description: SSH User
+    required: true
+  host:
+    description: SSH Host
+    required: true
+  remote-path:
+    description: Remote path where to deploy the docker image
+    required: true
+  port-mapping:
+    description: Port mappings to set in the container (hostPort1:containerPort1,hostPort2:containerPort2)
+    required: false
+    default: ""
+  container-stop-timeout:
+    description: Timeout in seconds to stop the container before to kill it
+    required: false
+    default: "20"
+  container-start-timeout:
+    description: Timeout in seconds to wait for the container to be started
+    required: false
+    default: "180"
+  container-stability-window:
+    description: Time in seconds to wait after the container is started to consider it as stable
+    required: false
+    default: "10"
+  container-wait-until-complete:
+    description: Wait until the container has completed its execution (blocking workflow)
+    required: false
+    default: "false"
+  container-skip-if-running:
+    description: Skip deployment if the container is already running on the remote server (exit without error)
+    required: false
+    default: "false"
+  ssh-key:
+    description: SSH Key
+    required: true
+  ssh-hosts:
+    description: SSH Hosts to add to known_hosts (one per line)
+    required: false
+    default: ""
+  ssh-known-hosts:
+    description: SSH Known Hosts
+    required: false
+  ssh-key-types:
+    description: Key types of ssh-keyscan (comma-separated, e.g., "rsa,ed25519")
+    required: false
+    default: "rsa,ed25519"
+  environment-variables:
+    description: Environment variables to set in the container (VAR1=value1,VAR2=value2)
+    required: false
+    default: ""
+  volume-mapping:
+    description: Volume mappings to set in the container (/host/path:/container/path,/host/path2:/container/path2)
+    required: false
+    default: ""
+  run-command:
+    description: Command to run in the container
+    required: false
+    default: ""
+  verbose:
+    description: Enable verbose mode. Outputs additional logs to help debugging.
+    required: false
+    default: "false"
+  command-line-interpreter:
+    description: Command line interpreter
+    required: false
+    default: bash
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      uses: albr21/gha-type-guard@1.0.0
+      with:
+        payload: |
+          [
+            {"value": "${{ inputs.mode }}", "type": "enum", "enumValues": ["full", "preload", "run-only"]},
+            {"value": "${{ inputs.image-name }}", "type": "string"},
+            {"value": "${{ inputs.image-tag }}", "type": "string"},
+            {"value": "${{ inputs.dockerfile }}", "type": "string"},
+            {"value": "${{ inputs.docker-context }}", "type": "string"},
+            {"value": "${{ inputs.user }}", "type": "string"},
+            {"value": "${{ inputs.host }}", "type": "string"},
+            {"value": "${{ inputs.remote-path }}", "type": "string"},
+            {"value": "${{ inputs.port-mapping }}", "type": "string"},
+            {"value": "${{ inputs.container-stop-timeout }}", "type": "integer"},
+            {"value": "${{ inputs.container-start-timeout }}", "type": "integer"},
+            {"value": "${{ inputs.container-stability-window }}", "type": "integer"},
+            {"value": "${{ inputs.container-wait-until-complete }}", "type": "boolean"},
+            {"value": "${{ inputs.container-skip-if-running }}", "type": "boolean"},
+            {"value": "${{ inputs.ssh-key }}", "type": "string"},
+            {"value": "${{ inputs.ssh-hosts }}", "type": "string"},
+            {"value": "${{ inputs.ssh-known-hosts }}", "type": "string"},
+            {"value": "${{ inputs.ssh-key-types }}", "type": "string"},
+            {"value": "${{ inputs.environment-variables }}", "type": "string"},
+            {"value": "${{ inputs.volume-mapping }}", "type": "string"},
+            {"value": "${{ inputs.run-command }}", "type": "string"},
+            {"value": "${{ inputs.verbose }}", "type": "boolean"},
+            {"value": "${{ inputs.command-line-interpreter }}", "type": "enum", "enumValues": ["bash", "sh"]}
+          ]
+
+    - name: Set GITHUB_ACTION_PATH variable
+      run: echo "GITHUB_ACTION_PATH=${GITHUB_ACTION_PATH}" >> $GITHUB_ENV
+      shell: ${{ inputs.command-line-interpreter }}
+
+    - name: Setup SSH Agent
+      uses: albr21/gha-ssh-agent@1.0.0
+      with:
+        ssh-key: ${{ inputs.ssh-key }}
+        hosts: ${{ inputs.ssh-hosts }}
+        known-hosts: ${{ inputs.ssh-known-hosts }}
+        key-types: ${{ inputs.ssh-key-types }}
+        command-line-interpreter: ${{ inputs.command-line-interpreter }}
+
+    - name: Run Action Scripts
+      run: |-
+        ${{ inputs.command-line-interpreter }} ${{ env.GITHUB_ACTION_PATH}}/scripts/run.sh \
+          --mode "${{ inputs.mode }}" \
+          --image-name "${{ inputs.image-name }}" \
+          --image-tag "${{ inputs.image-tag }}" \
+          --dockerfile "${{ inputs.dockerfile }}" \
+          --docker-context "${{ inputs.docker-context }}" \
+          --user "${{ inputs.user }}" \
+          --host "${{ inputs.host }}" \
+          --remote-path "${{ inputs.remote-path }}" \
+          --port-mapping "${{ inputs.port-mapping }}" \
+          --container-stop-timeout "${{ inputs.container-stop-timeout }}" \
+          --container-start-timeout "${{ inputs.container-start-timeout }}" \
+          --container-stability-window "${{ inputs.container-stability-window }}" \
+          --container-wait-until-complete "${{ inputs.container-wait-until-complete }}" \
+          --container-skip-if-running "${{ inputs.container-skip-if-running }}" \
+          --environment-variables "${{ inputs.environment-variables }}" \
+          --volume-mapping "${{ inputs.volume-mapping }}" \
+          --command "${{ inputs.run-command }}" \
+          ${{ inputs.verbose == 'true' && '--verbose' || '' }}
+      shell: ${{ inputs.command-line-interpreter }}
