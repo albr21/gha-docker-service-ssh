@@ -100,7 +100,9 @@ inputs:
     required: false
     default: "false"
   command-line-interpreter:
-    description: Command line interpreter
+    description: |-
+      Command line interpreter.
+      By default, it uses `bash`, but you can change it to `sh`.
     required: false
     default: bash
 
